@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main  # 监视主分支的推送
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'  # 设置 Python 版本
+
+      - name: Install dependencies
+        run: |
+          pip install flask waitress pillow pystray pyinstaller
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile web_file_server.py  # 使用 PyInstaller 打包为 EXE 文件
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}  # 使用运行编号作为标签
+          release_name: Release v${{ github.run_number }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload EXE
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          files: web_file_server/dist/web_file_server.exe  # 上传生成的 EXE 文件
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
