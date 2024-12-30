@@ -26,21 +26,18 @@ jobs:
         run: |
           pyinstaller --onefile web_file_server.py  # 使用 PyInstaller 打包为 EXE 文件
 
+      - name: List files in dist directory
+        run: |
+          ls -la dist  # 列出 dist 目录中的文件
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.run_number }}  # 使用运行编号作为标签
-          name: Release v${{ github.run_number }}  # 使用 name 而不是 release_name
+          release_name: Release v${{ github.run_number }}
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload EXE
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ github.run_number }}
-          files: web_file_server/dist/web_file_server.exe  # 上传生成的 EXE 文件
+          files: dist/web_file_server.exe  # 上传生成的 EXE 文件
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
