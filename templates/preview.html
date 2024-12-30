@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>文件预览 - {{ file.name }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .preview-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .preview-header {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .preview-content {
+            text-align: center;
+        }
+
+        img,
+        video {
+            max-width: 100%;
+            height: auto;
+        }
+
+        audio {
+            width: 100%;
+        }
+
+        .text-content {
+            white-space: pre-wrap;
+            text-align: left;
+            background: #f8f8f8;
+            padding: 20px;
+            border-radius: 5px;
+        }
+
+        .back-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .back-btn:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="preview-container">
+        <div class="preview-header">
+            <h1>{{ file.name }}</h1>
+            <p>文件大小: {{ file.size }} | 修改时间: {{ file.modified }}</p>
+        </div>
+
+        <div class="preview-content">
+            {% if file.type.startswith('image/') %}
+            <img src="{{ url_for('download_file', filename=file.name) }}" alt="{{ file.name }}">
+            {% elif file.type.startswith('video/') %}
+            <video controls>
+                <source src="{{ url_for('download_file', filename=file.name) }}" type="{{ file.type }}">
+                您的浏览器不支持视频播放
+            </video>
+            {% elif file.type.startswith('audio/') %}
+            <audio controls>
+                <source src="{{ url_for('download_file', filename=file.name) }}" type="{{ file.type }}">
+                您的浏览器不支持音频播放
+            </audio>
+            {% elif file.type.startswith('text/') %}
+            <div class="text-content">
+                <pre>{{ text_content }}</pre>
+            </div>
+            {% else %}
+            <p>此文件类型不支持预览</p>
+            {% endif %}
+        </div>
+
+        <a href="/" class="back-btn">返回文件列表</a>
+    </div>
+</body>
+
+</html>

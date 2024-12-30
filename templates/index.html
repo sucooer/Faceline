@@ -1,0 +1,121 @@
+from flask import Flask, request, render_template_string, send_file, jsonify
+import os
+import datetime
+import io
+import mimetypes
+import sys
+
+app = Flask(__name__)
+
+# HTML 模板直接嵌入到代码中
+HTML_TEMPLATE = '''
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>局域网文件传输</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        /* 在这里嵌入所有 CSS 样式 */
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        }
+
+        /* ... 这里添加你的所有 CSS 样式 ... */
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- ... 这里是你的 HTML 内容 ... -->
+    </div>
+    <script>
+        // ... 这里是你的 JavaScript 代码 ...
+    </script>
+</body>
+
+</html>
+'''
+
+# 创建上传文件夹
+UPLOAD_FOLDER = os.path.join(os.path.expanduser('~'), 'FileTransfer_uploads')
+if not os.path.exists(UPLOAD_FOLDER):
+os.makedirs(UPLOAD_FOLDER)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+@app.route('/')
+def index():
+files = []
+for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+size = os.path.getsize(path)
+modified = datetime.datetime.fromtimestamp(os.path.getmtime(path))
+
+# 获取文件类型
+mime_type, _ = mimetypes.guess_type(filename)
+mime_type = mime_type or 'application/octet-stream'
+
+files.append({
+'name': filename,
+'size': size,
+'modified': modified.strftime('%Y-%m-%d %H:%M:%S'),
+'type': mime_type,
+'previewable': mime_type and mime_type.startswith(('image/', 'text/'))
+})
+
+return render_template_string(HTML_TEMPLATE, files=files)
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+if 'file' not in request.files:
+return '没有文件', 400
+file = request.files['file']
+if file.filename == '':
+return '没有选择文件', 400
+if file:
+filename = file.filename
+file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+return '文件上传成功', 200
+
+@app.route('/download/<filename>')
+    def download_file(filename):
+    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
+    @app.route('/delete/<filename>', methods=['DELETE'])
+        def delete_file(filename):
+        try:
+        os.remove(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        return jsonify({'success': True})
+        except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+        if __name__ == '__main__':
+        # 禁用 Flask 的开发服务器输出
+        import logging
+        log = logging.getLogger('werkzeug')
+        log.disabled = True
+        cli = sys.modules['flask.cli']
+        cli.show_server_banner = lambda *x: None
+
+        try:
+        print(f"服务已启动，请在浏览器中访问: http://localhost:5000")
+        print(f"文件将保存在: {UPLOAD_FOLDER}")
+        app.run(host='0.0.0.0', port=5000, debug=False)
+        except Exception as e:
+        print(f"启动服务时出错: {str(e)}")
+        input("按回车键退出...")
