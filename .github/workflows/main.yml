@@ -31,7 +31,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.run_number }}  # 使用运行编号作为标签
-          release_name: Release v${{ github.run_number }}
+          name: Release v${{ github.run_number }}  # 使用 name 而不是 release_name
           draft: false
           prerelease: false
         env:
