@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 
 app = Flask(__name__)
 
-# HTML 模板
+# HTML 模板中添加自动刷新的 JavaScript 代码
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -268,6 +268,24 @@ HTML_TEMPLATE = '''
     </div>
 
     <script>
+        // 添加自动刷新功能
+        let lastModified = Date.now();
+        
+        function checkForUpdates() {
+            fetch('/check_updates?last_modified=' + lastModified)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.need_refresh) {
+                        location.reload();
+                    }
+                    lastModified = Date.now();
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // 每 2 秒检查一次更新
+        setInterval(checkForUpdates, 2000);
+
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('upload-form');
             const fileInput = document.getElementById('file-input');
@@ -336,13 +354,16 @@ if not os.path.exists(UPLOAD_FOLDER):
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-def human_size(size_in_bytes):
-    """将字节数转换为人类可读的格式"""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size_in_bytes < 1024.0:
-            return f"{size_in_bytes:.1f} {unit}"
-        size_in_bytes /= 1024.0
-    return f"{size_in_bytes:.1f} PB"
+# 添加一个变量来跟踪最后修改时间
+last_modified_time = datetime.datetime.now()
+
+@app.route('/check_updates')
+def check_updates():
+    global last_modified_time
+    client_last_modified = float(request.args.get('last_modified', 0)) / 1000.0
+    client_last_modified = datetime.datetime.fromtimestamp(client_last_modified)
+    need_refresh = last_modified_time > client_last_modified
+    return jsonify({'need_refresh': need_refresh})
 
 @app.route('/')
 def index():
@@ -371,6 +392,7 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    global last_modified_time
     try:
         if 'file' not in request.files:
             return '没有文件', 400
@@ -380,6 +402,7 @@ def upload_file():
         if file:
             filename = file.filename
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            last_modified_time = datetime.datetime.now()
             return '文件上传成功', 200
     except Exception as e:
         print(f"Error in upload: {str(e)}")
@@ -393,54 +416,160 @@ def download_file(filename):
         print(f"Error in download: {str(e)}")
         return str(e), 500
 
-@app.route('/preview/<filename>')
-def preview_file(filename):
-    try:
-        return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-    except Exception as e:
-        print(f"Error in preview: {str(e)}")
-        return str(e), 500
-
 @app.route('/delete/<filename>', methods=['DELETE'])
 def delete_file(filename):
+    global last_modified_time
     try:
         os.remove(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        last_modified_time = datetime.datetime.now()
         return jsonify({'success': True})
     except Exception as e:
         print(f"Error in delete: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/preview/<filename>')
+def preview_file(filename):
+    try:
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        size = os.path.getsize(file_path)
+        modified = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
+        mime_type, _ = mimetypes.guess_type(filename)
+        mime_type = mime_type or 'application/octet-stream'
+
+        file_info = {
+            'name': filename,
+            'size': human_size(size),
+            'modified': modified.strftime('%Y-%m-%d %H:%M:%S'),
+            'type': mime_type
+        }
+
+        # 如果是文本文件，读取内容
+        text_content = ''
+        if mime_type and mime_type.startswith('text/'):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    text_content = f.read()
+            except:
+                text_content = '无法读取文件内容'
+
+        return render_template_string('''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>文件预览 - {{ file.name }}</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        background-color: #f5f5f5;
+                    }
+                    .preview-container {
+                        max-width: 1000px;
+                        margin: 0 auto;
+                        background: white;
+                        padding: 20px;
+                        border-radius: 10px;
+                        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                    }
+                    .preview-header {
+                        margin-bottom: 20px;
+                        padding-bottom: 20px;
+                        border-bottom: 1px solid #eee;
+                    }
+                    .preview-content {
+                        text-align: center;
+                    }
+                    img, video {
+                        max-width: 100%;
+                        height: auto;
+                    }
+                    audio {
+                        width: 100%;
+                    }
+                    .text-content {
+                        white-space: pre-wrap;
+                        text-align: left;
+                        background: #f8f8f8;
+                        padding: 20px;
+                        border-radius: 5px;
+                    }
+                    .back-btn {
+                        display: inline-block;
+                        padding: 10px 20px;
+                        background-color: #4CAF50;
+                        color: white;
+                        text-decoration: none;
+                        border-radius: 10px;
+                        margin-top: 20px;
+                    }
+                    .back-btn:hover {
+                        background-color: #45a049;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="preview-container">
+                    <div class="preview-header">
+                        <h1>{{ file.name }}</h1>
+                        <p>文件大小: {{ file.size }} | 修改时间: {{ file.modified }}</p>
+                    </div>
+                    <div class="preview-content">
+                        {% if file.type.startswith('image/') %}
+                            <img src="{{ url_for('download_file', filename=file.name) }}" alt="{{ file.name }}">
+                        {% elif file.type.startswith('video/') %}
+                            <video controls>
+                                <source src="{{ url_for('download_file', filename=file.name) }}" type="{{ file.type }}">
+                                您的浏览器不支持视频播放
+                            </video>
+                        {% elif file.type.startswith('audio/') %}
+                            <audio controls>
+                                <source src="{{ url_for('download_file', filename=file.name) }}" type="{{ file.type }}">
+                                您的浏览器不支持音频播放
+                            </audio>
+                        {% elif file.type.startswith('text/') %}
+                            <div class="text-content">
+                                <pre>{{ text_content }}</pre>
+                            </div>
+                        {% else %}
+                            <p>此文件类型不支持预览</p>
+                        {% endif %}
+                    </div>
+                    <a href="/" class="back-btn">返回文件列表</a>
+                </div>
+            </body>
+            </html>
+        ''', file=file_info, text_content=text_content)
+    except Exception as e:
+        print(f"Error in preview: {str(e)}")
+        return str(e), 500
+
+def human_size(size_in_bytes):
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size_in_bytes < 1024.0:
+            return f"{size_in_bytes:.1f} {unit}"
+        size_in_bytes /= 1024.0
+    return f"{size_in_bytes:.1f} PB"
+
 def create_icon():
-    """创建一个文件传输图标"""
-    # 创建 32x32 像素的图像，使用 RGBA 模式支持透明度
     width = 32
     height = 32
     image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-    
-    # 创建绘图对象
     draw = ImageDraw.Draw(image)
-    
-    # 绘制圆形背景
-    circle_color = (76, 175, 80)  # 绿色
+    circle_color = (76, 175, 80)
     draw.ellipse([2, 2, width-2, height-2], fill=circle_color)
-    
-    # 绘制箭头
-    arrow_color = (255, 255, 255)  # 白色
-    
-    # 上箭头
+    arrow_color = (255, 255, 255)
     draw.polygon([
-        (16, 8),   # 顶点
-        (10, 14),  # 左下
-        (22, 14)   # 右下
+        (16, 8),
+        (10, 14),
+        (22, 14)
     ], fill=arrow_color)
-    
-    # 下箭头
     draw.polygon([
-        (16, 24),  # 底点
-        (10, 18),  # 左上
-        (22, 18)   # 右上
+        (16, 24),
+        (10, 18),
+        (22, 18)
     ], fill=arrow_color)
-    
     return image
 
 def open_browser():
@@ -459,11 +588,9 @@ def run_server():
         print(f"启动服务时出错: {str(e)}")
 
 if __name__ == '__main__':
-    # 创建并启动服务器线程
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
-    # 创建系统托盘图标
     icon = Icon(
         'File Transfer',
         create_icon(),
@@ -473,8 +600,5 @@ if __name__ == '__main__':
         )
     )
 
-    # 自动打开浏览器
     webbrowser.open('http://localhost:5000')
-
-    # 运行系统托盘
     icon.run() 

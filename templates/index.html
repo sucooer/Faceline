@@ -43,8 +43,22 @@ HTML_TEMPLATE = '''
     <div class="container">
         <!-- ... 这里是你的 HTML 内容 ... -->
     </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script>
         // ... 这里是你的 JavaScript 代码 ...
+
+        // 添加 WebSocket 连接代码
+        document.addEventListener('DOMContentLoaded', function() {
+            // 连接到 WebSocket 服务器
+            const socket = io();
+
+            // 监听刷新事件
+            socket.on('refresh_needed', function() {
+                location.reload();
+            });
+
+            // 原有的表单处理代码...
+        });
     </script>
 </body>
 
