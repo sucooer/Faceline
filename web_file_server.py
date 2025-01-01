@@ -9,6 +9,8 @@ import webbrowser
 import threading
 from pystray import Icon, Menu, MenuItem
 from PIL import Image, ImageDraw
+import win32gui
+import win32con
 
 app = Flask(__name__)
 
@@ -581,24 +583,46 @@ def quit_window(icon):
 
 def run_server():
     try:
+        # 禁用 Flask 的开发服务器输出
+        import logging
+        log = logging.getLogger('werkzeug')
+        log.disabled = True
+        cli = sys.modules['flask.cli']
+        cli.show_server_banner = lambda *x: None
+
         print(f"服务已启动，请在浏览器中访问: http://localhost:5000")
         print(f"文件将保存在: {UPLOAD_FOLDER}")
         serve(app, host='0.0.0.0', port=5000)
     except Exception as e:
         print(f"启动服务时出错: {str(e)}")
+        input("按回车键退出...")  # 添加这行以便在出错时看到错误信息
 
 if __name__ == '__main__':
-    server_thread = threading.Thread(target=run_server, daemon=True)
-    server_thread.start()
+    try:
+        # 使用 win32gui 隐藏控制台窗口
+        if sys.platform.startswith('win'):
+            the_program_to_hide = win32gui.GetForegroundWindow()
+            win32gui.ShowWindow(the_program_to_hide, win32con.SW_HIDE)
 
-    icon = Icon(
-        'File Transfer',
-        create_icon(),
-        menu=Menu(
-            MenuItem('打开网页', open_browser),
-            MenuItem('退出', quit_window)
+        # 创建并启动服务器线程
+        server_thread = threading.Thread(target=run_server, daemon=False)  # 改为非守护线程
+        server_thread.start()
+
+        # 创建系统托盘图标
+        icon = Icon(
+            'File Transfer',
+            create_icon(),
+            menu=Menu(
+                MenuItem('打开网页', open_browser),
+                MenuItem('退出', quit_window)
+            )
         )
-    )
 
-    webbrowser.open('http://localhost:5000')
-    icon.run() 
+        # 自动打开浏览器
+        webbrowser.open('http://localhost:5000')
+
+        # 运行系统托盘
+        icon.run()
+    except Exception as e:
+        print(f"程序启动错误: {str(e)}")
+        input("按回车键退出...") 
